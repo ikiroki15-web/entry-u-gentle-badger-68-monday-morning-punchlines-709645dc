@@ -5,7 +5,7 @@
 // punchline stay separate in the source, then validated before anything
 // is written to disk. Deterministic: same input, same bytes, every run.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -113,6 +113,28 @@ function writeEntry(text: string, outputPath: string): void {
   writeFileSync(outputPath, `${text}\n`, "utf8");
 }
 
+/**
+ * Read the entry back and confirm what landed on disk is exactly the joke
+ * we validated: same text, same character count, nothing appended or lost.
+ * A silent write failure must never pass as a good entry.
+ */
+function verifyWrittenEntry(expected: string, outputPath: string): void {
+  const onDisk = readFileSync(outputPath, "utf8");
+  const expectedFile = `${expected}\n`;
+  if (onDisk !== expectedFile) {
+    console.error(
+      `ERROR: ${outputPath} does not match the validated joke ` +
+        `(disk: ${charCount(onDisk)} chars, expected: ${charCount(expectedFile)} chars)`,
+    );
+    process.exit(1);
+  }
+  if (Buffer.byteLength(onDisk, "utf8") > 201) {
+    // 200 chars of joke plus the single trailing newline, at most.
+    console.error(`ERROR: ${outputPath} is unexpectedly large on disk`);
+    process.exit(1);
+  }
+}
+
 function main(): void {
   const joke = assembleJoke(SETUP, PUNCHLINE);
   const count = charCount(joke);
@@ -126,6 +148,7 @@ function main(): void {
   }
 
   writeEntry(joke, OUTPUT_PATH);
+  verifyWrittenEntry(joke, OUTPUT_PATH);
 
   console.log(joke);
   console.log(`characters: ${count} / ${MAX_CHARS}`);
